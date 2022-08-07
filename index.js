@@ -3,6 +3,9 @@ const path = require('node:path');
 require('dotenv').config();
 const {Client, Collection, GatewayIntentBits } = require('discord.js');
 const token = process.env.BOT_TOKEN;
+const express = require('express');
+const app = express();
+const port = 8080;
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -30,3 +33,11 @@ for(const file of commandFiles) {
 }
 
 client.login(token);
+
+app.get('/', (req, res) => {
+    res.send('Im alive')
+})
+  
+app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+})
