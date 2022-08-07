@@ -1,0 +1,27 @@
+{
+  "name": "steamcollectiondiscordbot",
+  "version": "0.0.1",
+  "description": "an app to subsribe to steam collections and describe updates",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AshleyBlakeHood/SteamCollectionDiscordBot.git"
+  },
+  "author": "Ashley Blake-Hood",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/AshleyBlakeHood/SteamCollectionDiscordBot/issues"
+  },
+  "homepage": "https://github.com/AshleyBlakeHood/SteamCollectionDiscordBot#readme",
+  "dependencies": {
+    "@discordjs/rest": "^1.0.1",
+    "discord.js": "^14.1.2",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "ws": "^8.8.1"
+  }
+}
