@@ -5,7 +5,7 @@ const {Client, Collection, GatewayIntentBits } = require('discord.js');
 const token = process.env.BOT_TOKEN;
 const express = require('express');
 const app = express();
-const port = 8080;
+const port = process.env.PORT || 8080;
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
