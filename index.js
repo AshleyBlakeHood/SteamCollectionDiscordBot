@@ -6,38 +6,28 @@ const token = process.env.BOT_TOKEN;
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
+const Bree = require('bree');
+const discordClient = require('./modules/discordClient');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const bree = new Bree({
+	jobs: [
+		{
+			name: 'checker',
+			timeout: '30s',
+			interval: '1m',
+		}
+	]
+});
 
-const eventsPath = path.join(__dirname, 'events');
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
-for (const file of eventFiles) {
-	const filePath = path.join(eventsPath, file);
-	const event = require(filePath);
-	if (event.once) {
-		client.once(event.name, (...args) => event.execute(...args));
-	} else {
-		client.on(event.name, (...args) => event.execute(...args));
-	}
-}
-
-client.commands = new Collection();
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-for(const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-    client.commands.set(command.data.name, command);
-}
-
-client.login(token);
+(async () => {
+	await discordClient.getInstance().login(token); 
+	//await bree.start();
+})();
 
 app.get('/', (req, res) => {
-    res.send('Im alive')
+    res.send('Im alive');
 })
   
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
+    console.log(`Example app listening on port ${port}`);
 })
