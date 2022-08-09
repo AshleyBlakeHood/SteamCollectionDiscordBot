@@ -125,7 +125,7 @@ module.exports = {
             const modIndex = modsToCreate.indexOf(element.modid);
             if (modIndex > -1) {
               modsToCreate.splice(modIndex, 1);
-              existingMods = [...existingMods, element.modid];
+              existingMods = [...existingMods, element];
             }
           });
         }
@@ -136,10 +136,10 @@ module.exports = {
 
       modsToCreate.forEach((modId) => {
         let dependancyArrayString = "{}";
-        const eh = dependantModLinks.filter((m) => m.modId === modId);
-        if (eh.length > 0) {
-          const bleh = eh.map((dep) => `${dep.depId}`);
-          dependancyArrayString = `{${bleh}}`;
+        const modDependancyLinksFiltered = dependantModLinks.filter((m) => m.modId === modId);
+        if (modDependancyLinksFiltered.length > 0) {
+          const modDependancyMap = modDependancyLinksFiltered.map((dep) => `${dep.depId}`);
+          dependancyArrayString = `{${modDependancyMap}}`;
         }
 
         newsModsToInsert = `${newsModsToInsert}('${modId}','${modUpdatedDateLinks
@@ -160,7 +160,30 @@ module.exports = {
         `INSERT INTO mods (ModID, LastUpdated, Dependencies, Collections, Channels) VALUES ${newsModsToInsert}`
       );
     };
-    console.log(mods);
+
+    if(existingMods.length > 0)
+    {
+        for(const mod of existingMods)
+        {
+            if(!mod.channels.includes(interaction.channelId))
+            {
+                mod.channels = [...mod.channels, interaction.channelId];
+            };
+
+            if(!mod.collections.includes(collectionId))
+            {
+                mod.collections = [...mod.collections, collectionId];
+            };
+        }
+
+        let updateQueryString = ""
+        for(const updatedMod of existingMods)
+        {
+            client.query(`UPDATE mods SET collections = '{${updatedMod.collections}}', channels = '{${updatedMod.channels}}' WHERE modid = '${updatedMod.modid}'`);
+        }
+    
+    }
+
     interaction.followUp(
       `Your collection ${collectionId} has been succesfully registered, it contains ${mods.length} mods including dependancies`
     );
