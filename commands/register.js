@@ -1,126 +1,188 @@
-const { SlashCommandBuilder } = require('discord.js');
-const axios = require('axios');
-const cheerio = require('cheerio');
-const dbAdapter = require('../db')
+const { SlashCommandBuilder } = require("discord.js");
+const axios = require("axios");
+const cheerio = require("cheerio");
+const dbAdapter = require("../db");
+const parse = require("date-fns/parse");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('register')
-        .setDescription('Register a new collection to track')
-        .addStringOption(option => 
-            option.setName('collectionid')
-                .setDescription('The ID of the collection you wish to track')
-                .setRequired(true)),
-    async execute(interaction) {
+  data: new SlashCommandBuilder()
+    .setName("register")
+    .setDescription("Register a new collection to track")
+    .addStringOption((option) =>
+      option
+        .setName("collectionid")
+        .setDescription("The ID of the collection you wish to track")
+        .setRequired(true)
+    ),
+  async execute(interaction) {
+    const collectionId = interaction.options.getString("collectionid");
 
-        const collectionId = interaction.options.getString('collectionid');
+    await interaction.reply(`Collection ${collectionId} is being registered`);
 
-        await interaction.reply(`Collection ${collectionId} is being registered`);
+    console.log(
+      `Guild:${interaction.guildId} Channel:${interaction.channelId}`
+    );
 
-        console.log(`Guild:${interaction.guildId} Channel:${interaction.channelId}`);
+    const collectionUrl = `${process.env.STEAM_FILE_URL}${collectionId}`;
 
-        const collectionUrl = `${process.env.STEAM_FILE_URL}${collectionId}`;
+    const collectionWorkshopPage = await getPage(collectionUrl);
 
-        const page = await getPage(collectionUrl);
+    const loadedCollectionPage = cheerio.load(collectionWorkshopPage);
+    let mods = [];
+    loadedCollectionPage(".collectionItemDetails").each(async (i, elem) => {
+      mods[i] = loadedCollectionPage(elem)
+        .children("a")
+        .attr("href")
+        .split("=")[1];
+    });
 
-        const $ = cheerio.load(page);
-        let mods = []
-        $(".collectionItemDetails").each(async (i, elem) => {mods[i] = $(elem).children('a').attr("href").split('=')[1]});
+    let modUpdatedDateLinks = [];
 
-        const dependantMods = [];
-        for(const mod of mods)
-        {
-            const modUrl = `${process.env.STEAM_FILE_URL}${mod}`;
-            const modPage = await getPage(modUrl);
-            const $m = cheerio.load(modPage);
-            $m(".requiredItemsContainer").each(async(i, elem) => {
-                const links = $m(elem).children('a');
-                
-                if(links.length > 0)
-                {
-                    for(let i = 0; i < links.length; i++)
-                    {
-                        dependantMods.push(links[`${i}`].attribs['href'].split('=')[1]);
-                    }
-                }               
-            })
+    let dependantMods = [];
+    let dependantModLinks = [];
+
+    for (let modIndex = 0; modIndex < mods.length; modIndex++) {
+      const modUrl = `${process.env.STEAM_FILE_URL}${mods[modIndex]}`;
+      const modPage = await getPage(modUrl);
+      const loadedModPage = cheerio.load(modPage);
+
+      const lastUpdatedDate = parseSteamDate(
+        loadedModPage(".detailsStatRight").last().text()
+      );
+      modUpdatedDateLinks = [
+        ...modUpdatedDateLinks,
+        { modId: mods[modIndex], lastUpdated: lastUpdatedDate },
+      ];
+
+      loadedModPage(".requiredItemsContainer").each(async (i, elem) => {
+        const links = loadedModPage(elem).children("a");
+
+        if (links.length > 0) {
+          for (let i = 0; i < links.length; i++) {
+            const depModId = links[`${i}`].attribs["href"].split("=")[1];
+            dependantMods = [...dependantMods, depModId];
+            dependantModLinks = [
+              ...dependantModLinks,
+              { modId: mods[modIndex], depId: depModId },
+            ];
+          }
         }
-        const uniqueDeps = [...new Set(dependantMods)];
-        mods.push(...uniqueDeps);
-        mods = [...new Set(mods)];
-        console.log(mods);
-        const client = await dbAdapter.getClient();
+      });
+    }
 
-        await client.query(`SELECT * FROM channels WHERE ChannelID='${interaction.channelId}' `).then(data => {
-            if(data.rowCount === 0)
-            {
-                client.query(`INSERT INTO channels (ChannelID, GuildID) VALUES ('${interaction.channelId}','${interaction.guildId}')`);
-                console.log(`Added new channel reg for ${interaction.channelId}`);
-            }
-        });
+    const uniqueDependancies = [...new Set(dependantMods)];
+    mods = [...mods, ...uniqueDependancies];
+    mods = [...new Set(mods)];
 
-        let modCheck = "";
-        mods.forEach(modId => {
-            modCheck = `${modCheck}'${modId}',`
-        })
-        modCheck = `(${modCheck.substring(0, modCheck.length - 1)});`
+    for (const checkMod of uniqueDependancies) {
+      const checkModUrl = `${process.env.STEAM_FILE_URL}${checkMod}`;
+      const checkModPage = await getPage(checkModUrl);
+      const $c = cheerio.load(checkModPage);
+      const lastUpdatedDate = parseSteamDate(
+        $c(".detailsStatRight").last().text()
+      );
+      modUpdatedDateLinks = [
+        ...modUpdatedDateLinks,
+        { modId: checkMod, lastUpdated: lastUpdatedDate },
+      ];
+    }
 
-        modsToCreate = mods;
-
-        await client.query(`SELECT * FROM mods WHERE modid IN ${modCheck}`).then(data => {
-            if(data.rowCount > 0)
-            {
-                data.rows.forEach(element => {
-                    const modIndex = modsToCreate.indexOf(element.modid);
-                    if(modIndex > -1)
-                    {
-                        modsToCreate.splice(modIndex, 1);
-                    }
-                });
-                
-            }
-        })
-
-        if(modsToCreate.length > 0)
+    let formattedMods = [];
+    for (const mod of mods) {
+      const updatedDate = modUpdatedDateLinks.find((d) => d.modId === mod);
+      const modDependancies = dependantModLinks.filter((d) => d.modId === mod);
+      const dependancyMap = modDependancies.map((dep) => dep.depId);
+      formattedMods = [
+        ...formattedMods,
         {
-            let inserts = "";
+          modId: mod,
+          lastupdated: updatedDate.lastUpdated,
+          dependancies: dependancyMap,
+        },
+      ];
+    }
 
-            modsToCreate.forEach(element => {
-                inserts = `${inserts}('${element}'),`
-            });
-            
-            inserts=`${inserts.substring(0, inserts.length - 1)};`;
-    
-            client.query(`INSERT INTO mods (ModID) VALUES ${inserts}`);
+    let modCheckQueryString = "";
+    mods.forEach((modId) => {
+      modCheckQueryString = `${modCheckQueryString}'${modId}',`;
+    });
+    modCheckQueryString = `(${modCheckQueryString.substring(
+      0,
+      modCheckQueryString.length - 1
+    )});`;
+
+    const client = await dbAdapter.getClient();
+
+    let modsToCreate = [];
+    Object.assign(modsToCreate, mods);
+    let existingMods = [];
+
+    await client
+      .query(`SELECT * FROM mods WHERE modid IN ${modCheckQueryString}`)
+      .then((data) => {
+        if (data.rowCount > 0) {
+          data.rows.forEach((element) => {
+            const modIndex = modsToCreate.indexOf(element.modid);
+            if (modIndex > -1) {
+              modsToCreate.splice(modIndex, 1);
+              existingMods = [...existingMods, element.modid];
+            }
+          });
         }
-        
-        
+      });
 
-        //console.log(existing);
-        //if mod doesn't exist add it
-        //if it exists but isnt in the collection remove it
+    if (modsToCreate.length > 0) {
+      let newsModsToInsert = "";
 
-        
+      modsToCreate.forEach((modId) => {
+        let dependancyArrayString = "{}";
+        const eh = dependantModLinks.filter((m) => m.modId === modId);
+        if (eh.length > 0) {
+          const bleh = eh.map((dep) => `${dep.depId}`);
+          dependancyArrayString = `{${bleh}}`;
+        }
 
-        // shortMods.forEach(element => {
-        //     client.query(`INSERT INTO Mods (ModID, ChannelID, GuildID) VALUES `);
-        // });
+        newsModsToInsert = `${newsModsToInsert}('${modId}','${modUpdatedDateLinks
+          .find((d) => d.modId === modId)
+          [
+            "lastUpdated"
+          ].toISOString()}','${dependancyArrayString}','{${collectionId}}','{${
+          interaction.channelId
+        }}'),`;
+      });
 
-        //await client.end();
+      newsModsToInsert = `${newsModsToInsert.substring(
+        0,
+        newsModsToInsert.length - 1
+      )};`;
 
-        //console.log(interaction.client.channels.fetch(interaction.channelId).then(channel => console.log(channel.name)));
-
-        // const channel = interaction.client.channels.fetch(interaction.channelId);
-
-        // await interaction.client.channels.cache.get(interaction.channelId).send('Hello, Im a test');
-
-        //channel.send('Hello, Im a test');
-
-        interaction.followUp(`Your collection ${collectionId} has been succesfully registered`)
-
-    },
+      client.query(
+        `INSERT INTO mods (ModID, LastUpdated, Dependencies, Collections, Channels) VALUES ${newsModsToInsert}`
+      );
+    };
+    console.log(mods);
+    interaction.followUp(
+      `Your collection ${collectionId} has been succesfully registered, it contains ${mods.length} mods including dependancies`
+    );
+  },
 };
 
 function getPage(pageUrl) {
-    return axios.get(pageUrl).then((res) => res.data);
+  return axios.get(pageUrl).then((res) => res.data);
+}
+
+function parseSteamDate(date) {
+  const dateReg = new RegExp("\\d{1,2} \\w{3} \\d{4} \\d{1,2}:\\d{2}\\w{2}");
+  const updateDate = date
+    .split(" @")
+    .join("")
+    .split(",")
+    .join("")
+    .toUpperCase();
+
+  if (dateReg.test(updateDate)) {
+    return parse(updateDate, "d LLL y h:mmaaaaaa", new Date());
+  } else {
+    return parse(updateDate, "d LLL h:mmaaaaaa", new Date());
+  }
 }
