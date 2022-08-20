@@ -46,9 +46,7 @@ module.exports = {
       const modPage = await getPage(modUrl);
       const loadedModPage = cheerio.load(modPage);
 
-      const lastUpdatedDate = parseSteamDate(
-        loadedModPage(".detailsStatRight").last().text()
-      );
+      const lastUpdatedDate = loadedModPage(".detailsStatRight").last().text();
       modUpdatedDateLinks = [
         ...modUpdatedDateLinks,
         { modId: mods[modIndex], lastUpdated: lastUpdatedDate },
@@ -78,9 +76,8 @@ module.exports = {
       const checkModUrl = `${process.env.STEAM_FILE_URL}${checkMod}`;
       const checkModPage = await getPage(checkModUrl);
       const $c = cheerio.load(checkModPage);
-      const lastUpdatedDate = parseSteamDate(
-        $c(".detailsStatRight").last().text()
-      );
+      const lastUpdatedDate = $c(".detailsStatRight").last().text();
+
       modUpdatedDateLinks = [
         ...modUpdatedDateLinks,
         { modId: checkMod, lastUpdated: lastUpdatedDate },
@@ -143,10 +140,7 @@ module.exports = {
         }
 
         newsModsToInsert = `${newsModsToInsert}('${modId}','${modUpdatedDateLinks
-          .find((d) => d.modId === modId)
-          [
-            "lastUpdated"
-          ].toISOString()}','${dependancyArrayString}','{${collectionId}}','{${
+          .find((d) => d.modId === modId).lastUpdated}','${dependancyArrayString}','{${collectionId}}','{${
           interaction.channelId
         }}'),`;
       });
@@ -176,14 +170,13 @@ module.exports = {
             };
         }
 
-        let updateQueryString = ""
         for(const updatedMod of existingMods)
         {
             client.query(`UPDATE mods SET collections = '{${updatedMod.collections}}', channels = '{${updatedMod.channels}}' WHERE modid = '${updatedMod.modid}'`);
         }
     
     }
-
+    client.release();
     interaction.followUp(
       `Your collection ${collectionId} has been succesfully registered, it contains ${mods.length} mods including dependancies`
     );
@@ -191,21 +184,11 @@ module.exports = {
 };
 
 function getPage(pageUrl) {
-  return axios.get(pageUrl).then((res) => res.data);
-}
-
-function parseSteamDate(date) {
-  const dateReg = new RegExp("\\d{1,2} \\w{3} \\d{4} \\d{1,2}:\\d{2}\\w{2}");
-  const updateDate = date
-    .split(" @")
-    .join("")
-    .split(",")
-    .join("")
-    .toUpperCase();
-
-  if (dateReg.test(updateDate)) {
-    return parse(updateDate, "d LLL y h:mmaaaaaa", new Date());
-  } else {
-    return parse(updateDate, "d LLL h:mmaaaaaa", new Date());
-  }
+    return axios.get(pageUrl, {
+        headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
+    }).then((res) => res.data);
 }

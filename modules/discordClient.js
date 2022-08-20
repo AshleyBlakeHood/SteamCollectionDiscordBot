@@ -2,14 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {Client, Collection, GatewayIntentBits } = require('discord.js');
 
-//const client = new Client({ intents: [GatewayIntentBits.Guilds] })
-
-//(async () => {client.login();})();
-
-// module.exports = {
-//     client: client
-// }
-
 class DiscordClient {
     constructor() {
         this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -44,6 +36,10 @@ class DiscordClient {
     async login() {
         await this.client.login();
     }
+
+    async destroy() {
+        await this.client.destroy();
+    }
 }
 
 class DiscordClientSingleton {
@@ -53,6 +49,7 @@ class DiscordClientSingleton {
 
     static getInstance() {
         if(!DiscordClientSingleton.instance) {
+            console.log('No instance exists of DiscordClient');
             DiscordClientSingleton.instance = new DiscordClient();
         }
         return (DiscordClientSingleton.instance);
