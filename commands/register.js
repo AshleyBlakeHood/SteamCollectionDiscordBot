@@ -2,7 +2,6 @@ const { SlashCommandBuilder } = require("discord.js");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const dbAdapter = require("../db");
-const parse = require("date-fns/parse");
 
 module.exports = {
   data: new SlashCommandBuilder()

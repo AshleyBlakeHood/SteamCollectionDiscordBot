@@ -1,29 +1,22 @@
-require('dotenv').config();
-const express = require('express');
+require("dotenv").config();
+const express = require("express");
+const fs = require("node:fs");
+const path = require("node:path");
+const { Client, Collection, GatewayIntentBits } = require("discord.js");
 const app = express();
 const port = process.env.PORT || 8080;
-const Bree = require('bree');
-const discordClient = require('./modules/discordClient');
+const { addEvents } = require('./modules/discordClientFunctions'); 
 
-const bree = new Bree({
-	jobs: [
-		{
-			name: 'checker',
-			timeout: '1m',
-			interval: '5m',
-		}
-	]
-});
-
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+addEvents(client);
 (async () => {
-	await discordClient.getInstance().login(); 
-	await bree.start();
+  await client.login();
 })();
 
-app.get('/', (req, res) => {
-    res.send('Im alive');
-})
-  
+app.get("/", (req, res) => {
+  res.send("Im alive");
+});
+
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`);
-})
+  console.log(`Example app listening on port ${port}`);
+});
