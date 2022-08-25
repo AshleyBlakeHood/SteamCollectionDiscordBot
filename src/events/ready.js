@@ -3,13 +3,14 @@ const dbAdapter = require("../db");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { getPage } = require("./../modules/webFunctions");
+const { EmbedBuilder } = require("discord.js");
 
 module.exports = {
   name: "ready",
   once: true,
   execute(client) {
     console.log(`Hot dang, its ready! You are ${client.user.tag}`);
-    let scheduledJob = new cron.CronJob("*/15 * * * *", async () => {
+    let scheduledJob = new cron.CronJob("*/1 * * * *", async () => {
       await modChecker(client);
     });
     scheduledJob.start();
@@ -34,6 +35,10 @@ async function modChecker(client) {
     const loadedModPage = cheerio.load(modWorkshopPage);
 
     const lastUpdatedDate = loadedModPage(".detailsStatRight").last().text();
+    const imageUrl = loadedModPage("link[rel='image_src']").attr("href");
+    const title = loadedModPage(".workshopItemTitle").text();
+
+    //console.log(imageUrl);
 
     if (mod.lastupdated != lastUpdatedDate) {
       const updateDbClient = await dbAdapter.getClient();
@@ -42,9 +47,13 @@ async function modChecker(client) {
           if (mod.mentions.length > 0) {
             usersToPing = [...usersToPing, ...mod.mentions];
           }
-          await client.channels.cache
-            .get(channel)
-            .send(`The following mod has been updated ${modUrl}`);
+          const modEmbed = new EmbedBuilder()
+            .setColor(0x1b2838)
+            .setTitle(`Mod Updated: ${title}`)
+            .setURL(modUrl)
+            .setImage(imageUrl)
+            .addFields({ name: "Updated at: ", value: lastUpdatedDate });
+          await client.channels.cache.get(channel).send({ embeds: [modEmbed] });
         } catch (error) {
           console.error(error.message);
         }
