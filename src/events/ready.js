@@ -36,7 +36,8 @@ async function modChecker(client) {
     const mods = await modDbClient.query("SELECT * FROM mods");
     modDbClient.release();
     console.log(`Im checking all ${mods.rowCount} of the mods`);
-
+    
+    let usersToPing = [];
     for(const mod of mods.rows) {
         const modUrl = `${process.env.STEAM_FILE_URL}${mod.modid}`;
         const modWorkshopPage = await getPage(modUrl);
@@ -49,6 +50,9 @@ async function modChecker(client) {
             const updateDbClient = await dbAdapter.getClient();
             for(const channel of mod.channels){
                 try{
+                    if(mod.mentions.length > 0) {
+                        usersToPing = [...usersToPing, ...mod.mentions];
+                    }
                     await client.channels.cache.get(channel).send(`The following mod has been updated ${modUrl}`);
                 } catch (error) {
                     console.error(error.message);
@@ -56,8 +60,30 @@ async function modChecker(client) {
                 
             }
             //updateDbClient.query(`UPDATE mods SET lastupdated = '${lastUpdatedDate}' WHERE modid = '${mod.modid}'`);
-            updateDbClient.release();
+            updateDbClient.release();           
         }
     }
+    usersToPing = [...new Set(usersToPing)];
+    if(usersToPing.length > 0)
+    {
+        let selectString =  "";
+        for(const user of usersToPing)
+        {
+            selectString = `${selectString}'${user}',`
+        }
+        selectString = trimQuery(selectString);
+        const pingDbClient = await dbAdapter.getClient();
+        await pingDbClient.query(`SELECT * FROM collectionlinks WHERE mentionid IN (${selectString});`).then(async (data) => {
+            for(const row of data.rows)
+            {
+                await client.channels.cache.get(row.channelid).send(`One or more of your registered mods has been updated <@${row.mentionid}>, the mods is part of collection ${row.collectionid}`);
+            }
+        });
+        pingDbClient.release();
+    }  
 	console.log("Checker is done");
 }
+
+function trimQuery(queryString) {
+    return queryString.substring(0, queryString.length - 1);
+  }

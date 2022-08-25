@@ -12,11 +12,30 @@ module.exports = {
         .setName("collectionid")
         .setDescription("The ID of the collection you wish to track")
         .setRequired(true)
+    )
+    .addMentionableOption((option) => 
+      option
+        .setName("mentionid")
+        .setDescription("The user to ping when a mod is updated")
     ),
   async execute(interaction) {
     const collectionId = interaction.options.getString("collectionid");
+    const mentionId = interaction.options.getMentionable('mentionid')?.id;
 
     await interaction.reply(`Collection ${collectionId} is being registered`);
+
+    const collectionLinkClient = await dbAdapter.getClient();
+
+    let existingRegistrations = [];
+    await collectionLinkClient.query(`SELECT * FROM collectionlinks WHERE collectionid = '${collectionId}' AND channelid = '${interaction.channelId}'`).then(async (data) => {
+      existingRegistrations = data.rows;
+      collectionLinkClient.release();
+    });
+
+    if(existingRegistrations.length > 0){
+      await interaction.followUp(`Collection ${collectionId} is already registered in this channel`)
+      return;
+    }
 
     console.log(
       `Guild:${interaction.guildId} Channel:${interaction.channelId}`
@@ -83,29 +102,11 @@ module.exports = {
       ];
     }
 
-    let formattedMods = [];
-    for (const mod of mods) {
-      const updatedDate = modUpdatedDateLinks.find((d) => d.modId === mod);
-      const modDependancies = dependantModLinks.filter((d) => d.modId === mod);
-      const dependancyMap = modDependancies.map((dep) => dep.depId);
-      formattedMods = [
-        ...formattedMods,
-        {
-          modId: mod,
-          lastupdated: updatedDate.lastUpdated,
-          dependancies: dependancyMap,
-        },
-      ];
-    }
-
     let modCheckQueryString = "";
     mods.forEach((modId) => {
       modCheckQueryString = `${modCheckQueryString}'${modId}',`;
     });
-    modCheckQueryString = `(${modCheckQueryString.substring(
-      0,
-      modCheckQueryString.length - 1
-    )});`;
+    modCheckQueryString = `(${trimQuery(modCheckQueryString)});`;
 
     const client = await dbAdapter.getClient();
 
@@ -132,48 +133,58 @@ module.exports = {
 
       modsToCreate.forEach((modId) => {
         let dependancyArrayString = "{}";
-        const modDependancyLinksFiltered = dependantModLinks.filter((m) => m.modId === modId);
+        const modDependancyLinksFiltered = dependantModLinks.filter(
+          (m) => m.modId === modId
+        );
         if (modDependancyLinksFiltered.length > 0) {
-          const modDependancyMap = modDependancyLinksFiltered.map((dep) => `${dep.depId}`);
+          const modDependancyMap = modDependancyLinksFiltered.map(
+            (dep) => `${dep.depId}`
+          );
           dependancyArrayString = `{${modDependancyMap}}`;
         }
-
-        newsModsToInsert = `${newsModsToInsert}('${modId}','${modUpdatedDateLinks
-          .find((d) => d.modId === modId).lastUpdated}','${dependancyArrayString}','{${collectionId}}','{${
+        let mentionString = "{}"
+        if(mentionId)
+        {
+          mentionString = `{${mentionId}}`
+        }
+        newsModsToInsert = `${newsModsToInsert}('${modId}','${
+          modUpdatedDateLinks.find((d) => d.modId === modId).lastUpdated
+        }','${dependancyArrayString}','{${collectionId}}','{${
           interaction.channelId
-        }}'),`;
+        }}', '${mentionString}'),`;
       });
 
-      newsModsToInsert = `${newsModsToInsert.substring(
-        0,
-        newsModsToInsert.length - 1
-      )};`;
+      newsModsToInsert = `${trimQuery(newsModsToInsert)};`;
 
       client.query(
-        `INSERT INTO mods (ModID, LastUpdated, Dependencies, Collections, Channels) VALUES ${newsModsToInsert}`
+        `INSERT INTO mods (ModID, LastUpdated, Dependencies, Collections, Channels, Mentions) VALUES ${newsModsToInsert}`
       );
-    };
+    }
 
-    if(existingMods.length > 0)
-    {
-        for(const mod of existingMods)
-        {
-            if(!mod.channels.includes(interaction.channelId))
-            {
-                mod.channels = [...mod.channels, interaction.channelId];
-            };
-
-            if(!mod.collections.includes(collectionId))
-            {
-                mod.collections = [...mod.collections, collectionId];
-            };
+    if (existingMods.length > 0) {
+      for (const mod of existingMods) {
+        if (!mod.channels.includes(interaction.channelId)) {
+          mod.channels = [...mod.channels, interaction.channelId];
         }
 
-        for(const updatedMod of existingMods)
-        {
-            client.query(`UPDATE mods SET collections = '{${updatedMod.collections}}', channels = '{${updatedMod.channels}}' WHERE modid = '${updatedMod.modid}'`);
+        if (!mod.collections.includes(collectionId)) {
+          mod.collections = [...mod.collections, collectionId];
         }
-    
+
+        if(!mod.mentions.includes(mentionId) && mentionId) {
+          mod.mentions = [...mod.mentions, mentionId];
+        }
+      }
+
+      for (const updatedMod of existingMods) {
+        client.query(
+          `UPDATE mods SET collections = '{${updatedMod.collections}}', channels = '{${updatedMod.channels}}', mentions = '{${updatedMod.mentions}}' WHERE modid = '${updatedMod.modid}'`
+        );
+      }
+    }
+    client.query(`INSERT INTO collectionlinks (CollectionID, ChannelID, GuildID) VALUES ('${collectionId}', '${interaction.channelId}', '${interaction.guildId}');`);
+    if(mentionId) {
+      client.query(`UPDATE collectionlinks SET MentionID = '${mentionId}' WHERE CollectionID = '${collectionId}' AND ChannelID = '${interaction.channelId}'`);
     }
     client.release();
     interaction.followUp(
@@ -183,11 +194,17 @@ module.exports = {
 };
 
 function getPage(pageUrl) {
-    return axios.get(pageUrl, {
-        headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-        }
-    }).then((res) => res.data);
+  return axios
+    .get(pageUrl, {
+      headers: {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
+    .then((res) => res.data);
+}
+
+function trimQuery(queryString) {
+  return queryString.substring(0, queryString.length - 1);
 }
