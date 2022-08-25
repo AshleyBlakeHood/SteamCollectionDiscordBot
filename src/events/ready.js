@@ -10,7 +10,7 @@ module.exports = {
   once: true,
   execute(client) {
     console.log(`Hot dang, its ready! You are ${client.user.tag}`);
-    let scheduledJob = new cron.CronJob("*/1 * * * *", async () => {
+    let scheduledJob = new cron.CronJob("*/15 * * * *", async () => {
       await modChecker(client);
     });
     scheduledJob.start();
