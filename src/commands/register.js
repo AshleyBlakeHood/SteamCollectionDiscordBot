@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
-const axios = require("axios");
 const cheerio = require("cheerio");
 const dbAdapter = require("../db");
+const { getPage } = require("./../modules/webFunctions");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -13,27 +13,33 @@ module.exports = {
         .setDescription("The ID of the collection you wish to track")
         .setRequired(true)
     )
-    .addMentionableOption((option) => 
+    .addMentionableOption((option) =>
       option
         .setName("mentionid")
         .setDescription("The user to ping when a mod is updated")
     ),
   async execute(interaction) {
     const collectionId = interaction.options.getString("collectionid");
-    const mentionId = interaction.options.getMentionable('mentionid')?.id;
+    const mentionId = interaction.options.getMentionable("mentionid")?.id;
 
     await interaction.reply(`Collection ${collectionId} is being registered`);
 
     const collectionLinkClient = await dbAdapter.getClient();
 
     let existingRegistrations = [];
-    await collectionLinkClient.query(`SELECT * FROM collectionlinks WHERE collectionid = '${collectionId}' AND channelid = '${interaction.channelId}'`).then(async (data) => {
-      existingRegistrations = data.rows;
-      collectionLinkClient.release();
-    });
+    await collectionLinkClient
+      .query(
+        `SELECT * FROM collectionlinks WHERE collectionid = '${collectionId}' AND channelid = '${interaction.channelId}'`
+      )
+      .then(async (data) => {
+        existingRegistrations = data.rows;
+        collectionLinkClient.release();
+      });
 
-    if(existingRegistrations.length > 0){
-      await interaction.followUp(`Collection ${collectionId} is already registered in this channel`)
+    if (existingRegistrations.length > 0) {
+      await interaction.followUp(
+        `Collection ${collectionId} is already registered in this channel`
+      );
       return;
     }
 
@@ -142,10 +148,9 @@ module.exports = {
           );
           dependancyArrayString = `{${modDependancyMap}}`;
         }
-        let mentionString = "{}"
-        if(mentionId)
-        {
-          mentionString = `{${mentionId}}`
+        let mentionString = "{}";
+        if (mentionId) {
+          mentionString = `{${mentionId}}`;
         }
         newsModsToInsert = `${newsModsToInsert}('${modId}','${
           modUpdatedDateLinks.find((d) => d.modId === modId).lastUpdated
@@ -171,7 +176,7 @@ module.exports = {
           mod.collections = [...mod.collections, collectionId];
         }
 
-        if(!mod.mentions.includes(mentionId) && mentionId) {
+        if (!mod.mentions.includes(mentionId) && mentionId) {
           mod.mentions = [...mod.mentions, mentionId];
         }
       }
@@ -182,9 +187,13 @@ module.exports = {
         );
       }
     }
-    client.query(`INSERT INTO collectionlinks (CollectionID, ChannelID, GuildID) VALUES ('${collectionId}', '${interaction.channelId}', '${interaction.guildId}');`);
-    if(mentionId) {
-      client.query(`UPDATE collectionlinks SET MentionID = '${mentionId}' WHERE CollectionID = '${collectionId}' AND ChannelID = '${interaction.channelId}'`);
+    client.query(
+      `INSERT INTO collectionlinks (CollectionID, ChannelID, GuildID) VALUES ('${collectionId}', '${interaction.channelId}', '${interaction.guildId}');`
+    );
+    if (mentionId) {
+      client.query(
+        `UPDATE collectionlinks SET MentionID = '${mentionId}' WHERE CollectionID = '${collectionId}' AND ChannelID = '${interaction.channelId}'`
+      );
     }
     client.release();
     interaction.followUp(
@@ -192,18 +201,6 @@ module.exports = {
     );
   },
 };
-
-function getPage(pageUrl) {
-  return axios
-    .get(pageUrl, {
-      headers: {
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
-    .then((res) => res.data);
-}
 
 function trimQuery(queryString) {
   return queryString.substring(0, queryString.length - 1);

@@ -2,6 +2,7 @@ const cron = require("cron");
 const dbAdapter = require("../db");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const { getPage } = require("./../modules/webFunctions");
 
 module.exports = {
   name: "ready",
@@ -14,18 +15,6 @@ module.exports = {
     scheduledJob.start();
   },
 };
-
-function getPage(pageUrl) {
-  return axios
-    .get(pageUrl, {
-      headers: {
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
-    .then((res) => res.data);
-}
 
 async function modChecker(client) {
   if (!client.isReady()) {

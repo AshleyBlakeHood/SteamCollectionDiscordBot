@@ -17,7 +17,7 @@ module.exports = {
 
     const modSelectQuery = `SELECT * FROM mods WHERE '${collectionId}' = ANY(collections) AND '${interaction.channel.id}' = ANY(channels)`;
     const channelCollectionLinkQuery = `SELECT * FROM collectionlinks WHERE ChannelID = '${interaction.channel.id}' AND NOT CollectionID = '${collectionId}'`;
-    const collectionChannelLinkQuery =  `SELECT * FROM collectionlinks WHERE CollectionID = '${collectionId}' AND NOT ChannelID = '${interaction.channel.id}'`;
+    const collectionChannelLinkQuery = `SELECT * FROM collectionlinks WHERE CollectionID = '${collectionId}' AND NOT ChannelID = '${interaction.channel.id}'`;
 
     const modSelectClient = await dbAdapter.getClient();
 
@@ -32,60 +32,61 @@ module.exports = {
       collectionChannelLinks = data.rows;
     });
 
-    console.log("all the collections except for the one from this interaction that has a link to this channel", channelCollectionLinks);
-    console.log("all the channels except the one from this interaction that has a link to this collection", collectionChannelLinks);
-
+    console.log(
+      "all the collections except for the one from this interaction that has a link to this channel",
+      channelCollectionLinks
+    );
+    console.log(
+      "all the channels except the one from this interaction that has a link to this collection",
+      collectionChannelLinks
+    );
 
     let modsToUpdate = [];
     let modsToDelete = [];
     await modSelectClient.query(modSelectQuery).then((data) => {
-      if(data.rowCount === 0) {
-        interaction.followUp('No mods have been registered for this collection in this channel');
+      if (data.rowCount === 0) {
+        interaction.followUp(
+          "No mods have been registered for this collection in this channel"
+        );
       }
       modSelectClient.release();
 
-      console.log(`Removing ${data.rowCount} mods for collection ${collectionId} in channel ${interaction.channel.id}`);
+      console.log(
+        `Removing ${data.rowCount} mods for collection ${collectionId} in channel ${interaction.channel.id}`
+      );
 
-      for(const mod of data.rows) {
+      for (const mod of data.rows) {
         const modIndex = mod.channels.indexOf(`${interaction.channel.id}`);
         const collectionIndex = mod.collections.indexOf(`${collectionId}`);
 
-/*
+        /*
 channelCollectionLinks is all the collections except for the one from this interaction that has a link to this channel
 If mod has collection id from channelCollectionLinks
         then don't remove channel
 */
 
-        for(const link of channelCollectionLinks)
-        {
-          if(mod.collections.includes(link.collectionid))
-          {
+        for (const link of channelCollectionLinks) {
+          if (mod.collections.includes(link.collectionid)) {
             //add to list of mods that should not have THE CHANNEL THIS INTERACTION IS FROM removed
           }
         }
 
-        for(const link of collectionChannelLinks)
-        {
-          if(mod.channels.includes(link.channelid))
-          {
+        for (const link of collectionChannelLinks) {
+          if (mod.channels.includes(link.channelid)) {
             //add to list of mods that should not have THE COLLECTION THIS INTERACTION IS FROM removed
           }
         }
-/*
+        /*
 collectionChannelLinks is all the channels except the one from this interaction that has a link to this collection
 If mod has channel id from collectionChannelLinks
         then dont remove collection
 
 */
 
-        if(modIndex != -1 && collectionIndex != -1)
-        {
-          
-          if(channelCollectionLinks.length > 0)
-          {
-            for(const collection in channelCollectionLinks)
-            {
-              if(!mod.collections.includes(collection)){
+        if (modIndex != -1 && collectionIndex != -1) {
+          if (channelCollectionLinks.length > 0) {
+            for (const collection in channelCollectionLinks) {
+              if (!mod.collections.includes(collection)) {
                 //mod.channels.splice(modIndex, 1);
                 break;
               }
@@ -94,8 +95,7 @@ If mod has channel id from collectionChannelLinks
 
           //mod.collections.splice(collectionIndex, 1);
           //mod.channels.splice(modIndex, 1);
-          if(mod.channels.length === 0)
-          {
+          if (mod.channels.length === 0) {
             modsToDelete = [...modsToDelete, mod];
           } else {
             modsToUpdate = [...modsToUpdate, mod];
@@ -108,7 +108,7 @@ If mod has channel id from collectionChannelLinks
     // const deleteQueryString = "";
 
     const modUpdateClient = await dbAdapter.getClient();
-    for(const mod of modsToUpdate){
+    for (const mod of modsToUpdate) {
       //modUpdateClient.query(`UPDATE mods SET channels = '{${mod.channels}}' WHERE modid = '${mod.modid}'`)
     }
     //console.log('Mods to Update', modsToUpdate);

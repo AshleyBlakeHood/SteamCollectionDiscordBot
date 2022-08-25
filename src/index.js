@@ -5,7 +5,7 @@ const path = require("node:path");
 const { Client, Collection, GatewayIntentBits } = require("discord.js");
 const app = express();
 const port = process.env.PORT || 8080;
-const { addEvents } = require('./modules/discordClientFunctions'); 
+const { addEvents } = require("./modules/discordClientFunctions");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 addEvents(client);

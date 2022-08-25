@@ -6,8 +6,9 @@ module.exports = {
     .setName("help")
     .setDescription("Khajit has answers if you have coin"),
   async execute(interaction) {
-    await interaction.reply(
-        {content: 'Testing ephemeral help', ephemeral: true}
-    );
+    await interaction.reply({
+      content: "Testing ephemeral help",
+      ephemeral: true,
+    });
   },
 };
