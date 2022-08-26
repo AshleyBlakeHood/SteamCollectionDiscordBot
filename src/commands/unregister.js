@@ -129,5 +129,6 @@ module.exports = {
     );
 
     modUpdateClient.release();
+    interaction.followUp(`Collection ${collectionId} has been unregistered`);
   },
 };
